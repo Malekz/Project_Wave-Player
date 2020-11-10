@@ -1,70 +1,145 @@
-import React, { useRef, useState } from 'react';
-import { FaPlay, FaPause, FaAngleLeft, FaAngleRight } from 'react-icons/fa';
+import React, { useState } from 'react';
+import {
+  FaPlay,
+  FaPause,
+  FaAngleLeft,
+  FaAngleRight,
+  FaVolumeDown,
+} from 'react-icons/fa';
 
-const Player = ({ currentSong, isPlaying, setIsplaying }) => {
-  // ref
-  const audioRef = useRef(null);
-  // event handler
-  const playSongHandler = () => {
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsplaying(!isPlaying);
-    } else {
-      audioRef.current.play();
-      setIsplaying(!isPlaying);
-    }
+import { playAudio } from '../util';
+
+const Player = ({
+  isPlaying,
+  setIsPlaying,
+  audioRef,
+  songInfo,
+  setSongInfo,
+  currentSong,
+  songs,
+  setCurrentSong,
+  setSongs,
+}) => {
+  const [activeVolume, setActiveVolume] = useState(false);
+  //UseEffect Update List
+  const activeLibraryHandler = (nextPrev) => {
+    const newSongs = songs.map((song) => {
+      if (song.id === nextPrev.id) {
+        return {
+          ...song,
+          active: true,
+        };
+      } else {
+        return {
+          ...song,
+          active: false,
+        };
+      }
+    });
+
+    setSongs(newSongs);
   };
 
-  const timeUpdateHandler = (e) => {
-    const current = e.target.currentTime;
-    const duration = e.target.duration;
-    setSongInfo({ ...songInfo, currentTime: current, duration });
+  const trackAnim = {
+    transform: `translateX(${songInfo.animationPercentage}%)`,
   };
-  const getTime = (time) => {
+  //Event Handlers
+  function getTime(time) {
     return (
       Math.floor(time / 60) + ':' + ('0' + Math.floor(time % 60)).slice(-2)
     );
-  };
-
+  }
   const dragHandler = (e) => {
     audioRef.current.currentTime = e.target.value;
     setSongInfo({ ...songInfo, currentTime: e.target.value });
   };
-  // state
-  const [songInfo, setSongInfo] = useState({
-    currentTime: 0,
-    duration: 0,
-  });
+
+  const playSongHandler = () => {
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(!isPlaying);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(!isPlaying);
+    }
+  };
+  const skipTrackHandler = async (direction) => {
+    let currentIndex = songs.findIndex((song) => song.id === currentSong.id);
+
+    //Forward BAck
+    if (direction === 'skip-forward') {
+      await setCurrentSong(songs[(currentIndex + 1) % songs.length]);
+      activeLibraryHandler(songs[(currentIndex + 1) % songs.length]);
+    }
+    if (direction === 'skip-back') {
+      if ((currentIndex - 1) % songs.length === -1) {
+        await setCurrentSong(songs[songs.length - 1]);
+        activeLibraryHandler(songs[songs.length - 1]);
+        playAudio(isPlaying, audioRef);
+        return;
+      }
+      await setCurrentSong(songs[(currentIndex - 1) % songs.length]);
+      activeLibraryHandler(songs[(currentIndex - 1) % songs.length]);
+    }
+    if (isPlaying) audioRef.current.play();
+  };
+  const changeVolume = (e) => {
+    let value = e.target.value;
+    audioRef.current.volume = value;
+    setSongInfo({ ...songInfo, volume: value });
+  };
 
   return (
     <div className="player">
       <div className="time-control">
         <p>{getTime(songInfo.currentTime)}</p>
-        <input
-          min={0}
-          max={songInfo.duration}
-          value={songInfo.currentTime}
-          onChange={dragHandler}
-          type="range"
-        />
-        <p>{getTime(songInfo.duration)}</p>
+        <div
+          style={{
+            background: `linear-gradient(to right, ${currentSong.color[0]},${currentSong.color[1]})`,
+          }}
+          className="track"
+        >
+          <input
+            value={songInfo.currentTime}
+            type="range"
+            max={songInfo.duration || 0}
+            min={0}
+            onChange={dragHandler}
+          />
+          <div style={trackAnim} className="animate-track"></div>
+        </div>
+        <p>{songInfo.duration ? getTime(songInfo.duration) : '0:00'}</p>
       </div>
-
       <div className="play-control">
-        <FaAngleLeft className="skip-back" size={32} />
+        <FaAngleLeft
+          onClick={() => skipTrackHandler('skip-back')}
+          className="skip-back"
+          size={32}
+        />
+
         {isPlaying ? (
           <FaPause onClick={playSongHandler} className="play" size={32} />
         ) : (
           <FaPlay onClick={playSongHandler} className="play" size={32} />
         )}
-        <FaAngleRight className="skip-forward" size={32} />
+
+        <FaAngleRight
+          className="skip-forward"
+          size={32}
+          onClick={() => skipTrackHandler('skip-forward')}
+        />
+        <FaVolumeDown onClick={() => setActiveVolume(!activeVolume)} />
+        {activeVolume && (
+          <input
+            onChange={changeVolume}
+            value={songInfo.volume}
+            max="1"
+            min="0"
+            step="0.01"
+            type="range"
+          />
+        )}
       </div>
-      <audio
-        onTimeUpdate={timeUpdateHandler}
-        onLoadedMetadata={timeUpdateHandler}
-        ref={audioRef}
-        src={currentSong.audio}
-      ></audio>
     </div>
   );
 };
